@@ -8,15 +8,15 @@ import { PresentOpening } from "./PresentOpening";
 
 type Phase = "present" | "happy" | "slideA" | "slideB";
 
-const SLIDE_A = `You have been such an amazing mother to me throughout all my life — this is our 18th Mother's Day together. You should be proud you made it this far. I know this year has been tricky, but despite that you still were there for me whenever I needed it, whether I was in Toronto or London. You always looked out for me, offered to get me food or Ubers, always trying to spoil me. I really appreciate that I can come to you with anything and you'll listen to me and help me deal with it.
+const SLIDE_A = `You have been such an amazing mother to me throughout all my life. This is our 18th Mother's Day together. You should be proud you made it this far. I know this year has been tricky, but despite that you still were there for me whenever I needed it, whether I was in Toronto or London. You always looked out for me, offered to get me food or Ubers, always trying to spoil me. I really appreciate that I can come to you with anything and you'll listen to me and help me deal with it.
 
-Anyways, right now I do not have a lot of money, and I couldn't find any physical gift that I thought was personal enough — and so instead I made this…`;
+Anyways, right now I do not have a lot of money, and I couldn't find any physical gift that I thought was personal enough. So instead I made this…`;
 
 const SLIDE_B = `This website is a simple family site where any of us can add memories, photos, songs, and more from our trips, photos of us as kids, or memories of you that were significant in our lives. Me, Haas, and Daddy already added a bunch of memories and photos involving you that were very strong for us.
 
-My hope for this is that we can also use it when I go off to uni or when Daddy is on vacation and we are thinking of each other — we can add a memory we were thinking about or just look back on memories that were important to other family members.
+My hope for this is that we can also use it when I go off to uni or when Daddy is on vacation and we are thinking of each other. We can add a memory we were thinking about, or just look back on memories that were important to other family members.
 
-Anyways, I really hope that this makes you smile — and if you're ever missing any of us, hopefully this can ease some of it. Happy Mother's Day. Love you, Mama.
+Anyways, I really hope that this makes you smile, and if you're ever missing any of us, hopefully this can ease some of it. Happy Mother's Day. Love you Mama.
 
 Love, Jais`;
 
@@ -27,6 +27,15 @@ export function IntroFlow() {
 
   useEffect(() => {
     try {
+      const qs = new URLSearchParams(window.location.search);
+      const wantsReplay = qs.get("replay") === "1";
+      if (wantsReplay) {
+        localStorage.removeItem(INTRO_STORAGE_KEY);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("replay");
+        window.history.replaceState({}, "", url.pathname + url.search);
+        return;
+      }
       if (localStorage.getItem(INTRO_STORAGE_KEY)) {
         router.replace("/profiles");
       }

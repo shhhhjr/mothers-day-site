@@ -34,7 +34,7 @@ export function SiteHeader({ profileName }: SiteHeaderProps) {
             <span className="hidden text-sm text-muted sm:inline">Hi, {profileName}</span>
           )}
           <Link
-            href="/"
+            href="/?replay=1"
             className="text-sm text-accent underline-offset-4 hover:underline"
           >
             Replay intro

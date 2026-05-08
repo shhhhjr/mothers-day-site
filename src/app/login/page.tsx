@@ -40,7 +40,7 @@ export default function LoginPage() {
         )}
 
         <p className="mt-8 text-center text-sm text-muted">
-          <Link href="/" className="text-accent underline-offset-4 hover:underline">
+          <Link href="/?replay=1" className="text-accent underline-offset-4 hover:underline">
             Replay the Mother&apos;s Day intro
           </Link>
         </p>
