@@ -28,16 +28,11 @@ export function IntroFlow() {
   useEffect(() => {
     try {
       const qs = new URLSearchParams(window.location.search);
-      const wantsReplay = qs.get("replay") === "1";
-      if (wantsReplay) {
+      if (qs.get("replay") === "1") {
         localStorage.removeItem(INTRO_STORAGE_KEY);
         const url = new URL(window.location.href);
         url.searchParams.delete("replay");
         window.history.replaceState({}, "", url.pathname + url.search);
-        return;
-      }
-      if (localStorage.getItem(INTRO_STORAGE_KEY)) {
-        router.replace("/profiles");
       }
     } catch {
       /* ignore */

@@ -1,0 +1,28 @@
+<!--
+  Paste EVERYTHING below this comment block (the comment itself is fine to leave in).
+  Destination: Supabase Dashboard → Authentication → Email Templates → Reset Password → Message Body.
+
+  This site doesn't currently have a "set new password" page wired up — we
+  log you straight in instead. If you later add a /reset-password page,
+  change `next=/profiles` below to `next=/reset-password`.
+
+  Required Supabase config for this template's URL to work:
+    Authentication → URL Configuration → Site URL  MUST start with `https://`
+-->
+<h2>Reset your password</h2>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/profiles">
+    Tap here to sign back in
+  </a>
+</p>
+
+<p>
+  Or paste this 6-digit code into the "Email link" tab on the sign-in page:
+</p>
+
+<p style="font-size: 24px; letter-spacing: 4px;"><strong>{{ .Token }}</strong></p>
+
+<p style="color: #666; font-size: 12px;">
+  If you didn't request this, you can ignore this email.
+</p>

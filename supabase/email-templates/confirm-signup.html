@@ -1,0 +1,29 @@
+<!--
+  Paste EVERYTHING below this comment block (the comment itself is fine to leave in).
+  Destination: Supabase Dashboard → Authentication → Email Templates → Confirm Signup → Message Body.
+
+  ONLY needed if you keep "Confirm email" enabled. The recommended setup
+  for this family site is to TURN OFF "Confirm email" in
+  Authentication → Providers → Email — then no confirmation mail is sent
+  and signup works instantly without any email round-trip.
+
+  Required Supabase config for this template's URL to work:
+    Authentication → URL Configuration → Site URL  MUST start with `https://`
+-->
+<h2>Confirm your account</h2>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup&next=/profiles">
+    Tap here to confirm and finish signing up
+  </a>
+</p>
+
+<p>
+  Or paste this 6-digit code into the "Email link" tab on the sign-in page:
+</p>
+
+<p style="font-size: 24px; letter-spacing: 4px;"><strong>{{ .Token }}</strong></p>
+
+<p style="color: #666; font-size: 12px;">
+  If you didn't sign up for this, you can ignore this email.
+</p>

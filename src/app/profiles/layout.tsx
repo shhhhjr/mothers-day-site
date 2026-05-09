@@ -2,14 +2,14 @@ import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { getCurrentMember } from "@/lib/auth/member";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/env";
+import { isAuthBypassed, isSupabaseConfigured } from "@/lib/env";
 
 export default async function ProfilesLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  if (isSupabaseConfigured()) {
+  if (isSupabaseConfigured() && !isAuthBypassed()) {
     const supabase = await createServerSupabaseClient();
     const {
       data: { user },
@@ -27,6 +27,20 @@ export default async function ProfilesLayout({
     return (
       <div className="min-h-screen">
         <SiteHeader profileName={member.profiles.display_name} />
+        <div className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">{children}</div>
+      </div>
+    );
+  }
+
+  if (isSupabaseConfigured() && isAuthBypassed()) {
+    return (
+      <div className="min-h-screen">
+        <div className="border-b border-amber-500/50 bg-amber-950/50 px-4 py-3 text-center text-sm text-amber-50">
+          Testing mode: <code className="rounded bg-black/40 px-1">NEXT_PUBLIC_SKIP_AUTH=1</code> —
+          login is skipped. Timeline writes may fail without a signed-in user (RLS). Remove before
+          production.
+        </div>
+        <SiteHeader />
         <div className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">{children}</div>
       </div>
     );

@@ -12,6 +12,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (process.env.NEXT_PUBLIC_SKIP_AUTH === "1") {
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -43,13 +47,17 @@ export async function middleware(request: NextRequest) {
   const protectedPrefixes = ["/profiles", "/onboarding"];
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
 
+  // Unauthenticated visitor trying to reach protected app pages → send them
+  // to the homepage (which is now the sign-up / sign-in form).
   if (isProtected && !user) {
-    const login = new URL("/login", request.url);
-    login.searchParams.set("next", pathname);
-    return NextResponse.redirect(login);
+    const home = new URL("/", request.url);
+    if (pathname !== "/") home.searchParams.set("next", pathname);
+    return NextResponse.redirect(home);
   }
 
-  if (pathname === "/login" && user) {
+  // Signed-in user landing on the homepage or /login → skip the form and
+  // jump straight to the app.
+  if (user && (pathname === "/" || pathname === "/login")) {
     return NextResponse.redirect(new URL("/profiles", request.url));
   }
 

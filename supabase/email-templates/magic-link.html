@@ -1,0 +1,27 @@
+<!--
+  Paste EVERYTHING below this comment block (the comment itself is fine to leave in).
+  Destination: Supabase Dashboard → Authentication → Email Templates → Magic Link → Message Body.
+
+  Required Supabase config for this template to produce a working URL:
+    Authentication → URL Configuration → Site URL  MUST start with `https://`
+    e.g.  https://mother-s-day-iota.vercel.app
+    NOT   mother-s-day-iota.vercel.app
+-->
+<h2>Sign up for family memories</h2>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email&next=/profiles">
+    Tap here to finish signing up
+  </a>
+</p>
+
+<p>
+  Or, if the link won't open on your device, paste this 6-digit code into the
+  "Email link" tab on the sign-in page:
+</p>
+
+<p style="font-size: 24px; letter-spacing: 4px;"><strong>{{ .Token }}</strong></p>
+
+<p style="color: #666; font-size: 12px;">
+  If you didn't request this, you can ignore this email.
+</p>

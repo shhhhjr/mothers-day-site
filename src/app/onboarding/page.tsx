@@ -2,11 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OnboardingForm } from "@/components/auth/OnboardingForm";
 import { getCurrentMember } from "@/lib/auth/member";
-import { isSupabaseConfigured } from "@/lib/env";
+import { isAuthBypassed, isSupabaseConfigured } from "@/lib/env";
 
 export default async function OnboardingPage() {
+  if (isSupabaseConfigured() && isAuthBypassed()) {
+    redirect("/profiles");
+  }
+
   if (!isSupabaseConfigured()) {
-    redirect("/login");
+    redirect("/");
   }
 
   const member = await getCurrentMember();
@@ -25,7 +29,7 @@ export default async function OnboardingPage() {
         </p>
         <OnboardingForm />
         <p className="mt-6 text-center text-sm text-muted">
-          <Link href="/login" className="text-accent underline-offset-4 hover:underline">
+          <Link href="/" className="text-accent underline-offset-4 hover:underline">
             Back to sign in
           </Link>
         </p>

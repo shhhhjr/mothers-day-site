@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/env";
+import { isAuthBypassed, isSupabaseConfigured } from "@/lib/env";
 
 type SiteHeaderProps = {
   profileName?: string;
@@ -17,7 +17,7 @@ export function SiteHeader({ profileName }: SiteHeaderProps) {
     if (supabase) {
       await supabase.auth.signOut();
     }
-    router.replace("/login");
+    router.replace("/");
     router.refresh();
   }
 
@@ -34,12 +34,12 @@ export function SiteHeader({ profileName }: SiteHeaderProps) {
             <span className="hidden text-sm text-muted sm:inline">Hi, {profileName}</span>
           )}
           <Link
-            href="/?replay=1"
+            href="/intro?replay=1"
             className="text-sm text-accent underline-offset-4 hover:underline"
           >
             Replay intro
           </Link>
-          {authReady && (
+          {authReady && !isAuthBypassed() && (
             <button
               type="button"
               onClick={() => void signOut()}
