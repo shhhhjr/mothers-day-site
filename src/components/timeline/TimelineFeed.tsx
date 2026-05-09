@@ -10,12 +10,19 @@ type TimelineFeedProps = {
   entries: TimelineEntry[];
   highlightSlug: string;
   currentAuthorSlug?: string;
+  /**
+   * Map of profile slug → accent hex (from `EnrichedProfile.accent`). Used to
+   * color the author's display name in their chosen color so it's quickly
+   * scannable on the timeline.
+   */
+  accentBySlug?: Record<string, string>;
 };
 
 export function TimelineFeed({
   entries,
   highlightSlug,
   currentAuthorSlug,
+  accentBySlug = {},
 }: TimelineFeedProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<"all" | "you">("all");
@@ -83,7 +90,16 @@ export function TimelineFeed({
                   <span>
                     {entry.author ? (
                       <>
-                        <span className="text-foreground">{entry.author.display_name}</span>
+                        <span
+                          className="font-medium"
+                          style={{
+                            color:
+                              accentBySlug[entry.author.slug] ??
+                              "var(--color-foreground, #f5f5f4)",
+                          }}
+                        >
+                          {entry.author.display_name}
+                        </span>
                         <span className="text-muted"> · </span>
                       </>
                     ) : null}

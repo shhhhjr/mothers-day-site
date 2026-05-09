@@ -4,6 +4,14 @@ The homepage is a sign-up / sign-in form. A relative types their email and a pas
 
 The original Mother’s Day gift-unwrap intro lives at [`/intro`](src/app/intro/page.tsx) and is also reachable via the **Replay intro** link in the header once you’re signed in.
 
+Once signed in, the header also exposes:
+
+- A **bell icon** with an unread badge — polls every 30s and surfaces a dropdown of recent activity (someone posted a memory, someone tagged you). Tag-notifications are highlighted to stand out from generic "new post" ones. "Mark all read" clears the badge.
+- A **gear icon → `/settings`** with three tabs:
+  - **Profile** — change your display name, upload an avatar (JPEG/PNG/WebP, ≤4 MB; falls back to initial+gradient if unset), pick one of 10 accent colors. Renames are global (everyone sees the new name); accent color is used for your bubble + your name on the timeline.
+  - **Notifications** — toggle "notify me on every post" and "notify me when I'm tagged". The "email me too" toggle is shown disabled with a "requires SMTP setup" note (see step 4 above).
+  - **Account** — change password (no old-password prompt since you're already signed in), sign out of all devices, or permanently delete your account (cascade-deletes your profile link + every entry you authored).
+
 ---
 
 ## ⚠️ Four one-time settings to flip BEFORE the family will be able to use the site
@@ -177,8 +185,12 @@ Set `NEXT_PUBLIC_SKIP_AUTH=1` in `.env.local`, restart `npm run dev`, then `/pro
 ## Supabase project setup (one-time)
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. **SQL Editor** → run [`supabase/migrations/001_initial.sql`](supabase/migrations/001_initial.sql) (creates the schema, RLS policies, and the `memory-photos` storage bucket).
+2. **SQL Editor** → run, in order:
+   - [`supabase/migrations/001_initial.sql`](supabase/migrations/001_initial.sql) — base schema, RLS policies, `memory-photos` bucket.
+   - [`supabase/migrations/002_settings_and_notifications.sql`](supabase/migrations/002_settings_and_notifications.sql) — accent color column, notification preferences, in-app `notifications` table, `avatars` storage bucket.
 3. Do the **four one-time settings at the top of this README**.
+
+> **Optional but recommended for the “Delete my account” button:** set `SUPABASE_SERVICE_ROLE_KEY` in Vercel’s env vars. Without it the delete action removes the user’s family-profile link and all their entries (cascade), but leaves the auth user row orphaned (harmless — the picker treats them as a brand-new user if they ever return). With the service role key, the auth user row is also deleted via the admin API. The key lives at **Supabase Dashboard → Project Settings → API → service_role**. Keep it secret; never expose it to the browser.
 
 ---
 
@@ -208,7 +220,14 @@ After this you should never have to debug auth again.
 - `src/app/auth/callback/route.ts` — verifies email links via `verifyOtp({ token_hash, type })`
 - `src/app/actions/auth.ts` — non-PKCE server actions for sign-up + magic-link send (so emailed tokens work cross-device)
 - `src/app/actions/member.ts` — `completeOnboarding(slug)` server action used by `ProfileGrid` to claim a profile on first click
+- `src/app/actions/settings.ts` — update profile (name, avatar, accent), notification preferences, change password, sign out everywhere, delete account
+- `src/app/actions/notifications.ts` — fanout helper called from each entry creator + list/markRead for the bell dropdown
+- `src/app/settings/page.tsx` — three-tab settings (Profile / Notifications / Account), reachable from the gear icon in the header
 - `src/components/auth/LoginForm.tsx` — three-tab form (Sign up / Sign in / Reset password)
 - `src/components/profiles/ProfileGrid.tsx` — the big "Who's watching?" picker; claims on first click, navigates after
+- `src/components/notifications/NotificationBell.tsx` — bell icon + dropdown in the header (polls unread count every 30s)
+- `src/components/settings/` — Profile / Notifications / Account sub-forms
+- `src/lib/data/profiles.ts` — `fetchAllProfiles()` / `fetchProfileBySlug()` returning DB rows enriched with the curated palette (hue + accent hex)
 - `supabase/email-templates/` — paste-into-Supabase HTML
 - `supabase/migrations/001_initial.sql` — schema + RLS
+- `supabase/migrations/002_settings_and_notifications.sql` — settings, notifications, avatars bucket

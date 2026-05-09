@@ -1,12 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { completeOnboarding } from "@/app/actions/member";
-import { PROFILES, type ProfileSlug } from "@/lib/constants";
+import type { ProfileSlug } from "@/lib/constants";
+import type { EnrichedProfile } from "@/lib/data/profiles";
 
 type ProfileGridProps = {
+  /** All 5 family profiles, in canonical order, with palette + avatar applied. */
+  profiles: EnrichedProfile[];
   /** The profile slug this user has already claimed, if any. */
   claimedSlug: string | null;
   /**
@@ -18,7 +22,11 @@ type ProfileGridProps = {
   canClaim: boolean;
 };
 
-export function ProfileGrid({ claimedSlug, canClaim }: ProfileGridProps) {
+export function ProfileGrid({
+  profiles,
+  claimedSlug,
+  canClaim,
+}: ProfileGridProps) {
   const router = useRouter();
   const [pendingSlug, setPendingSlug] = useState<ProfileSlug | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,17 +68,27 @@ export function ProfileGrid({ claimedSlug, canClaim }: ProfileGridProps) {
       )}
 
       <ul className="mt-14 grid grid-cols-2 gap-8 sm:grid-cols-3 md:grid-cols-5 md:gap-10">
-        {PROFILES.map((p) => {
+        {profiles.map((p) => {
           const isClaimedByMe = claimedSlug === p.slug;
           const isThisLoading = pendingSlug === p.slug && isPending;
 
-          // Shared visuals so the button and link variants look identical.
           const innerVisual = (
             <>
               <span
-                className={`relative flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br ${p.hue} text-2xl font-semibold text-white shadow-[0_20px_50px_rgba(0,0,0,0.45)] transition group-hover:scale-105 group-hover:ring-2 group-hover:ring-accent-gold/80 sm:h-28 sm:w-28`}
+                className={`relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br ${p.hue} text-2xl font-semibold text-white shadow-[0_20px_50px_rgba(0,0,0,0.45)] transition group-hover:scale-105 group-hover:ring-2 group-hover:ring-accent-gold/80 sm:h-28 sm:w-28`}
               >
-                {p.initial}
+                {p.avatarUrl ? (
+                  <Image
+                    src={p.avatarUrl}
+                    alt={`${p.displayName} avatar`}
+                    fill
+                    sizes="(min-width: 640px) 112px, 96px"
+                    className="object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  p.initial
+                )}
                 {isClaimedByMe && (
                   <span
                     aria-hidden
@@ -80,7 +98,10 @@ export function ProfileGrid({ claimedSlug, canClaim }: ProfileGridProps) {
                   </span>
                 )}
               </span>
-              <span className="text-center text-lg font-medium text-foreground/90 group-hover:text-foreground">
+              <span
+                className="text-center text-lg font-medium group-hover:text-foreground"
+                style={{ color: p.accent }}
+              >
                 {p.displayName}
               </span>
               {isThisLoading && (
@@ -89,7 +110,6 @@ export function ProfileGrid({ claimedSlug, canClaim }: ProfileGridProps) {
             </>
           );
 
-          // First-time visitor: clicking is a CLAIM (server action then nav).
           if (canClaim) {
             return (
               <li key={p.slug}>
@@ -105,7 +125,6 @@ export function ProfileGrid({ claimedSlug, canClaim }: ProfileGridProps) {
             );
           }
 
-          // Returning visitor (or no auth at all): plain navigation.
           return (
             <li key={p.slug}>
               <Link

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { fanoutNotifications } from "@/app/actions/notifications";
 import type { ProfileSlug } from "@/lib/constants";
 
 async function getAuthorMemberId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
@@ -63,6 +64,12 @@ export async function createMemory(input: {
     );
   }
 
+  await fanoutNotifications({
+    entryId: entry.id,
+    authorMemberId: memberId,
+    taggedProfileIds: profiles.map((p) => p.id),
+  });
+
   revalidatePath("/profiles");
   return { entryId: entry.id };
 }
@@ -83,14 +90,27 @@ export async function createLoveNote(input: {
 
   if (!recipient) return { error: "Recipient not found." };
 
-  const { error } = await supabase.from("entries").insert({
-    type: "love_note",
-    author_member_id: memberId,
-    body: input.body.trim(),
-    recipient_profile_id: recipient.id,
-  });
+  const { data: entry, error } = await supabase
+    .from("entries")
+    .insert({
+      type: "love_note",
+      author_member_id: memberId,
+      body: input.body.trim(),
+      recipient_profile_id: recipient.id,
+    })
+    .select("id")
+    .single();
 
-  if (error) return { error: error.message };
+  if (error || !entry) return { error: error?.message ?? "Could not save." };
+
+  // Treat the love note's recipient as a tag for notification routing —
+  // the recipient deserves the louder "tagged" notification, not just
+  // the default "new_post".
+  await fanoutNotifications({
+    entryId: entry.id,
+    authorMemberId: memberId,
+    taggedProfileIds: [recipient.id],
+  });
 
   revalidatePath("/profiles");
   return { ok: true };
@@ -130,6 +150,12 @@ export async function createPhotodrop(input: {
     );
   }
 
+  await fanoutNotifications({
+    entryId: entry.id,
+    authorMemberId: memberId,
+    taggedProfileIds: profiles.map((p) => p.id),
+  });
+
   revalidatePath("/profiles");
   return { entryId: entry.id };
 }
@@ -167,6 +193,12 @@ export async function createMilestone(input: {
       })),
     );
   }
+
+  await fanoutNotifications({
+    entryId: entry.id,
+    authorMemberId: memberId,
+    taggedProfileIds: profiles.map((p) => p.id),
+  });
 
   revalidatePath("/profiles");
   return { entryId: entry.id };
