@@ -1,6 +1,6 @@
 # Mother’s Day — family memory site
 
-The homepage is a sign-up / sign-in form. Once a relative confirms their email and picks their family profile, they land on a shared timeline backed by **Supabase** (Postgres + Auth + Storage) where everyone can add memories, love notes, photodrops, and milestones from any device.
+The homepage is a sign-up / sign-in form. A relative types their email and a password, picks their family profile, and lands on a shared timeline backed by **Supabase** (Postgres + Auth + Storage) where everyone can add memories, love notes, photodrops, and milestones from any device.
 
 The original Mother’s Day gift-unwrap intro lives at [`/intro`](src/app/intro/page.tsx) and is also reachable via the **Replay intro** link in the header once you’re signed in.
 
@@ -77,40 +77,57 @@ For each one:
 
 > ⚠️ **Do NOT wrap the contents in triple backticks (` ``` `) when pasting.** The Supabase template editor is plain HTML — backticks will appear as literal text in the email and the `<a>` link inside them will not render. Just paste the raw HTML from the file.
 
-### 3. Supabase: leave “Confirm email” ON
+### 3. Supabase: turn “Confirm email” OFF (recommended for a 5-person family site)
 
 > **Supabase Dashboard → Authentication → Providers → Email**
 >
 > - **Enable Email provider** → **ON**
-> - **Confirm email** → **ON**
+> - **Confirm email** → **OFF** ← this one
+> - Click **Save**
 
-With it on, the **Sign up** form on `/` creates the account and emails a confirmation link. Clicking that link verifies the address and signs the person in (on whatever device they opened the email on). The app supports cross-device confirmation — both signup and password-reset emails are routed through a non-PKCE server action so the token in the email is not browser-locked.
+Why off: Supabase’s built-in (free) email is rate-limited to **about 3 sends per hour**, and switching to a custom SMTP provider (Resend, Mailgun, etc.) has enough sharp edges to cost you an evening (sender restrictions, domain verification, port 587 vs 465, etc. — see step 4 below). For a private site shared between five family members, requiring email verification is more friction than security value.
 
-### 4. Supabase: set up Resend SMTP (or your relatives won’t receive emails)
+With it off, the **Sign up** flow becomes:
 
-> **This is the step that keeps catching us out.** Supabase’s built-in (free) email service is rate-limited to **about 3 emails per hour**. During testing you will hit that limit instantly. After it’s hit, sign-ups will silently succeed in the API but no email will be delivered. If you only ever see “sign-up email sent” status messages but never receive the email, this is the cause.
->
-> The fix is custom SMTP. The five-minute, free option is **Resend** (Supabase’s recommended provider; 3,000 emails/month on the free plan).
+1. Family member visits `/`, types their email + a password they pick → submits.
+2. The app logs them straight in. No email needed.
+3. They pick their family profile on `/onboarding` and they’re in.
 
-#### One-time Resend setup
+Password sign-in and password reset still work — for password reset to function they will need email delivery, but that’s a one-off and a single rate-limited send is fine.
 
-1. Sign up at [resend.com](https://resend.com).
-2. **Resend → API Keys → Create API Key** (full access; copy the value, it begins with `re_`).
-3. **Resend → Domains** — for the fastest path, just use the default `onboarding@resend.dev` sender (no domain required for development; you can verify a real domain later).
-4. **Supabase Dashboard → Project Settings → Authentication → SMTP Settings → Enable Custom SMTP.** Fill in:
+### 4. (Optional) Supabase: set up Resend SMTP if you really want email verification
 
-   | Field | Value |
-   |---|---|
-   | Host | `smtp.resend.com` |
-   | Port | `587` |
-   | Username | `resend` |
-   | Password | the `re_…` API key from step 2 |
-   | Sender email | `onboarding@resend.dev` (or your verified domain) |
-   | Sender name | `Family memories` (or whatever you want) |
+If you want “Confirm email” on — so new sign-ups have to click a link in their inbox before getting access — you need custom SMTP. Below is the **exact** procedure with the gotchas that have bitten us.
 
-5. Save. Sign up again — the email should arrive within seconds. Resend’s **Logs** tab will show every send attempt and any bounces.
+#### 4a. Create the Resend API key
 
-If you can’t set up Resend right now and the rate-limit is blocking you, temporarily flip **Confirm email** to **OFF** in Supabase → Authentication → Providers → Email. Sign-ups will then log people in instantly with the password they chose, no email required. Flip it back on once SMTP is configured.
+1. Sign up at [resend.com](https://resend.com) using **the email address you’ll be testing sign-ups with** (this matters — see warning below).
+2. **Resend → API Keys → Create API Key** (full access). Copy the value — it begins with `re_`.
+
+#### 4b. Plug it into Supabase
+
+> **Supabase Dashboard → Project Settings → Authentication → SMTP Settings → Enable Custom SMTP**
+
+| Field | Value | Common mistake |
+|---|---|---|
+| Host | `smtp.resend.com` | — |
+| Port | `587` | If your platform blocks 587, try `2587` |
+| Username | `resend` *(literal string, not your email)* | Pasting your account email here is the #1 cause of `unexpected_failure` |
+| Password | the `re_…` API key from 4a | Watch for trailing whitespace |
+| Sender email | `onboarding@resend.dev` *(testing only — see warning)* OR `noreply@your-verified-domain.com` | — |
+| Sender name | e.g. `Family memories` | — |
+
+Click **Save**.
+
+> ⚠️ **Critical: `onboarding@resend.dev` only sends to the address you used to register your Resend account.** If you signed up to Resend with `jaisraj@gmail.com`, then SMTP sends from `onboarding@resend.dev` will **succeed only when delivering to `jaisraj@gmail.com`**. Any other recipient gets rejected by Resend, which Supabase surfaces as **`HTTP 500 unexpected_failure`** when the family member tries to sign up. To send to anyone else (i.e. your actual family) you must verify a domain you own at **Resend → Domains** and use a sender address at that domain. There is no way around this; it’s a Resend anti-abuse policy.
+
+#### 4c. Verify it’s actually working
+
+1. Sign up at `/` with the email that owns your Resend account.
+2. The email should arrive within seconds.
+3. **Resend → Logs** should show the send. If Logs is empty, Supabase never reached Resend → SMTP credentials in step 4b are wrong (re-check Username = `resend` and Password = full API key).
+
+If you don’t want to bother with domain verification right now, just leave step 3 (Confirm email OFF) in place. You can flip Confirm email back on later once a custom domain is verified at Resend.
 
 ---
 
@@ -118,20 +135,20 @@ If you can’t set up Resend right now and the rate-limit is blocking you, tempo
 
 `/` is the sign-up / sign-in form with three tabs:
 
-1. **Sign up** *(default)* — email + password. Sends a confirmation email if “Confirm email” is on (otherwise logs in instantly). After signing up, a “Resend confirmation email” button appears in case Supabase rate-limited the first send.
+1. **Sign up** *(default)* — email + password. With “Confirm email” OFF (the recommended setting in step 3), the user is logged in instantly. With it on, Supabase emails a confirmation link and a “Resend confirmation email” button appears below the form in case the first send was rate-limited.
 2. **Sign in** — email + password for returning visitors.
 3. **Reset password** — sends a recovery email; the link lands on `/reset-password` where the user picks a new password and is signed straight into the app.
 
-Flow for a brand-new family member:
+Flow for a brand-new family member (with Confirm email OFF — the default we recommend):
 
 1. They visit the URL → see the **Sign up** form.
 2. Enter email + a password they pick → submit.
-3. Supabase emails a confirmation link.
-4. They open the email **on any device** and tap the link.
-5. `/auth/callback` verifies the token, sets the session cookie, redirects to `/profiles`.
-6. `/profiles/layout` sees they don’t have a profile yet → redirects to `/onboarding`.
-7. They pick which family member they are (Mama, Daddy, Jais, Haas, Dadi).
-8. Done — they’re on the timeline.
+3. They are logged in immediately and redirected to `/profiles`.
+4. `/profiles/layout` sees they don’t have a profile yet → redirects to `/onboarding`.
+5. They pick which family member they are (Mama, Daddy, Jais, Haas, Dadi).
+6. Done — they’re on the timeline.
+
+If you flip Confirm email ON, insert “open the email and tap the verification link” between steps 2 and 3 — `/auth/callback` then verifies the `token_hash`, sets the session cookie, and continues into `/profiles`. The link is cross-device safe because the email-sending server actions deliberately bypass PKCE.
 
 After that, the everyday flow is **Sign in** with email + password from any device.
 
@@ -188,6 +205,6 @@ After this you should never have to debug auth again.
 - `src/app/onboarding/`, `src/app/profiles/`, `src/app/profiles/[slug]/` — main app
 - `src/app/auth/callback/route.ts` — verifies email links via `verifyOtp({ token_hash, type })`
 - `src/app/actions/auth.ts` — non-PKCE server actions for sign-up + magic-link send (so emailed tokens work cross-device)
-- `src/components/auth/LoginForm.tsx` — three-tab form (Sign up / Sign in / Email link)
+- `src/components/auth/LoginForm.tsx` — three-tab form (Sign up / Sign in / Reset password)
 - `supabase/email-templates/` — paste-into-Supabase HTML
 - `supabase/migrations/001_initial.sql` — schema + RLS

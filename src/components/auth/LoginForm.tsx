@@ -45,6 +45,40 @@ function describeServerActionFailure(
   return parts.join(" ");
 }
 
+/**
+ * Recognize the most common Supabase "I tried to send an email and it broke"
+ * failure modes and render advice the family member can actually act on.
+ * Returns null if the error is something else and the raw message is fine.
+ */
+function explainEmailDeliveryFailure(
+  result: Extract<AuthActionResult, { ok: false }>,
+): string | null {
+  const message = (result.error || "").toLowerCase();
+  const isUnexpectedFailure =
+    result.code === "unexpected_failure" || result.status === 500;
+  const mentionsSmtp =
+    message.includes("smtp") ||
+    message.includes("sender") ||
+    message.includes("email") ||
+    message.includes("confirmation");
+  const isRateLimit =
+    result.status === 429 ||
+    message.includes("rate") ||
+    message.includes("over_email_send_rate_limit");
+
+  if (isRateLimit) {
+    return `Supabase’s free-tier email service blocked this send because it has been used too many times in the last hour (it limits us to ~3 messages an hour). Wait an hour, or ask Jais to disable “Confirm email” in Supabase so signups don’t need an email step.`;
+  }
+
+  if (isUnexpectedFailure && mentionsSmtp) {
+    return `Supabase tried to email the confirmation link and the email service rejected it. This is almost always a Supabase ↔ SMTP misconfiguration — NOT a problem with your email address.
+
+Quickest fix (Jais): in Supabase Dashboard → Authentication → Providers → Email, toggle “Confirm email” OFF. Sign-up will then log you in instantly with the password you chose, no email needed.`;
+  }
+
+  return null;
+}
+
 function maskEmail(normalized: string): string {
   const [loc, dom] = normalized.split("@");
   if (!loc || !dom) return "(invalid email)";
@@ -102,7 +136,13 @@ Use the “Sign in” tab below with the email + password you signed up with —
     setLoading(false);
 
     if (!result.ok) {
-      setStatus({ kind: "error", text: describeServerActionFailure(result) });
+      const friendly = explainEmailDeliveryFailure(result);
+      setStatus({
+        kind: "error",
+        text: friendly
+          ? `${friendly}\n\nRaw error: ${describeServerActionFailure(result)}`
+          : describeServerActionFailure(result),
+      });
       return;
     }
 
@@ -150,11 +190,12 @@ If you don’t see it in a few minutes, check spam, then use the “Resend confi
     );
     setLoading(false);
     if (!result.ok) {
+      const friendly = explainEmailDeliveryFailure(result);
       setStatus({
         kind: "error",
-        text: `${describeServerActionFailure(result)}
-
-This usually means Supabase’s free-tier email service is rate-limited (only ~3 emails per hour). Either wait an hour or have the project owner set up Resend SMTP — see README.`,
+        text: friendly
+          ? `${friendly}\n\nRaw error: ${describeServerActionFailure(result)}`
+          : describeServerActionFailure(result),
       });
       return;
     }
@@ -198,9 +239,12 @@ This usually means Supabase’s free-tier email service is rate-limited (only ~3
     setLoading(false);
 
     if (!result.ok) {
+      const friendly = explainEmailDeliveryFailure(result);
       setStatus({
         kind: "error",
-        text: describeServerActionFailure(result),
+        text: friendly
+          ? `${friendly}\n\nRaw error: ${describeServerActionFailure(result)}`
+          : describeServerActionFailure(result),
       });
       return;
     }
