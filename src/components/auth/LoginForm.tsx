@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { getAuthSiteOrigin } from "@/lib/auth/site-url";
 import {
-  sendMagicLink,
+  resendConfirmation,
+  sendPasswordReset,
   signUpWithPassword,
   type AuthActionResult,
 } from "@/app/actions/auth";
 
-type Mode = "signup" | "password" | "magic";
+type Mode = "signup" | "password" | "reset";
 
 type Status =
   | { kind: "info"; text: string }
@@ -61,7 +62,12 @@ export function LoginForm() {
   const [mode, setMode] = useState<Mode>("signup");
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(false);
-  const [emailCode, setEmailCode] = useState("");
+  // The email used in the most recent successful signup; surfaces a
+  // "resend confirmation email" affordance underneath the success message
+  // for cases where Supabase's free-tier SMTP delays/rate-limits delivery.
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(
+    null,
+  );
 
   const authError = searchParams.get("auth_error");
   const authDetail = searchParams.get("auth_detail");
@@ -86,6 +92,7 @@ Use the “Sign in” tab below with the email + password you signed up with —
     e.preventDefault();
     setLoading(true);
     setStatus(null);
+    setPendingConfirmEmail(null);
     const origin = getAuthSiteOrigin();
     const result = await signUpWithPassword(
       email.trim(),
@@ -121,13 +128,39 @@ Use the “Sign in” tab below with the email + password you signed up with —
       return;
     }
 
+    setPendingConfirmEmail(email.trim());
     setStatus({
       kind: "success",
       text: `Confirmation email sent to ${maskEmail(email.trim().toLowerCase())}.
 
 Open that email on ANY device and tap the link inside — it will log you in. The page you’re on now can be closed.
 
-If the email doesn’t arrive in a few minutes, check spam, then try the “Sign in” tab below with the email + password you just chose.`,
+If you don’t see it in a few minutes, check spam, then use the “Resend confirmation email” button below.`,
+    });
+  }
+
+  async function handleResendConfirmation() {
+    if (!pendingConfirmEmail) return;
+    setLoading(true);
+    setStatus(null);
+    const origin = getAuthSiteOrigin();
+    const result = await resendConfirmation(
+      pendingConfirmEmail,
+      `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+    );
+    setLoading(false);
+    if (!result.ok) {
+      setStatus({
+        kind: "error",
+        text: `${describeServerActionFailure(result)}
+
+This usually means Supabase’s free-tier email service is rate-limited (only ~3 emails per hour). Either wait an hour or have the project owner set up Resend SMTP — see README.`,
+      });
+      return;
+    }
+    setStatus({
+      kind: "success",
+      text: `Resent. Check ${maskEmail(pendingConfirmEmail.toLowerCase())} again — it can take a couple of minutes.`,
     });
   }
 
@@ -153,80 +186,37 @@ If the email doesn’t arrive in a few minutes, check spam, then try the “Sign
     router.refresh();
   }
 
-  async function handleMagicLink(e: React.FormEvent) {
+  async function handlePasswordReset(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setStatus(null);
     const origin = getAuthSiteOrigin();
-    const result = await sendMagicLink(
+    const result = await sendPasswordReset(
       email.trim(),
-      `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      `${origin}/auth/callback?type=recovery&next=/reset-password`,
     );
     setLoading(false);
 
     if (!result.ok) {
       setStatus({
         kind: "error",
-        text: `${describeServerActionFailure(result)}
-
-If this keeps failing, use “Sign in” with your password instead.`,
+        text: describeServerActionFailure(result),
       });
       return;
     }
 
     setStatus({
       kind: "success",
-      text: `Email sent to ${maskEmail(email.trim().toLowerCase())}.
+      text: `If ${maskEmail(email.trim().toLowerCase())} is on file, a reset link is on its way.
 
-Open it on any device and tap the link — it logs you in directly.`,
+Tap the link in the email and you’ll be taken to a page to choose a new password.`,
     });
-  }
-
-  async function handleVerifyEmailCode(e: React.FormEvent) {
-    e.preventDefault();
-    const supabase = createBrowserSupabaseClient();
-    if (!supabase) return;
-    const trimmed = emailCode.replace(/\s+/g, "");
-    if (!email.trim() || trimmed.length < 6) {
-      setStatus({
-        kind: "error",
-        text: "Enter the email you used and the 6-digit code from your inbox.",
-      });
-      return;
-    }
-    setLoading(true);
-    setStatus(null);
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: trimmed,
-      type: "email",
-    });
-    setLoading(false);
-    if (error) {
-      setStatus({
-        kind: "error",
-        text: describeAuthFailure(error, "That code did not work."),
-      });
-      return;
-    }
-    if (!session) {
-      setStatus({
-        kind: "error",
-        text: "No session returned. Make sure your Supabase Magic Link template includes the {{ .Token }} variable (see README).",
-      });
-      return;
-    }
-    router.replace(next);
-    router.refresh();
   }
 
   const tabs: { id: Mode; label: string }[] = [
     { id: "signup", label: "Sign up" },
     { id: "password", label: "Sign in" },
-    { id: "magic", label: "Email link" },
+    { id: "reset", label: "Reset password" },
   ];
 
   const statusColor =
@@ -336,69 +326,35 @@ Open it on any device and tap the link — it logs you in directly.`,
         </form>
       )}
 
-      {mode === "magic" && (
-        <div className="space-y-8">
-          <form onSubmit={(e) => void handleMagicLink(e)} className="space-y-4">
-            <p className="text-xs text-muted">
-              Forgot your password? We’ll email you a one-tap sign-in link.
-              The link works on any device — open the email wherever is
-              easiest.
-            </p>
-            <label className="block text-sm text-muted">
-              Email
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/15 bg-background/60 px-4 py-3 text-foreground placeholder:text-muted focus:border-accent-gold focus:outline-none"
-                placeholder="you@family.com"
-                autoComplete="email"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-full bg-accent-gold py-3 text-sm font-medium text-background transition hover:brightness-110 disabled:opacity-50"
-            >
-              {loading ? "Sending…" : "Email me a link"}
-            </button>
-          </form>
-
-          <div className="border-t border-white/10 pt-6">
-            <p className="text-xs text-muted">
-              If the link won’t open, paste the 6-digit code from the email
-              here instead.
-            </p>
-            <form
-              onSubmit={(e) => void handleVerifyEmailCode(e)}
-              className="mt-5 space-y-3"
-            >
-              <label className="block text-sm text-muted">
-                Code from email
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  autoComplete="one-time-code"
-                  value={emailCode}
-                  onChange={(e) =>
-                    setEmailCode(e.target.value.replace(/[^\d]/g, "").slice(0, 8))
-                  }
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-background/60 px-4 py-3 text-foreground tracking-widest placeholder:text-muted focus:border-accent-gold focus:outline-none"
-                  placeholder="123456"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={loading || emailCode.length < 6}
-                className="w-full rounded-full border border-accent-gold/50 bg-card py-3 text-sm font-medium text-foreground transition hover:border-accent-gold disabled:opacity-50"
-              >
-                Verify code
-              </button>
-            </form>
-          </div>
-        </div>
+      {mode === "reset" && (
+        <form
+          onSubmit={(e) => void handlePasswordReset(e)}
+          className="space-y-4"
+        >
+          <p className="text-xs text-muted">
+            Forgot your password? Enter the email you signed up with and we’ll
+            send a link to set a new one. The link works on any device.
+          </p>
+          <label className="block text-sm text-muted">
+            Email
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-white/15 bg-background/60 px-4 py-3 text-foreground placeholder:text-muted focus:border-accent-gold focus:outline-none"
+              placeholder="you@family.com"
+              autoComplete="email"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-full bg-accent-gold py-3 text-sm font-medium text-background transition hover:brightness-110 disabled:opacity-50"
+          >
+            {loading ? "Sending…" : "Send reset link"}
+          </button>
+        </form>
       )}
 
       {authBanner && (
@@ -417,6 +373,17 @@ Open it on any device and tap the link — it logs you in directly.`,
         >
           {status.text}
         </p>
+      )}
+
+      {pendingConfirmEmail && mode === "signup" && (
+        <button
+          type="button"
+          onClick={() => void handleResendConfirmation()}
+          disabled={loading}
+          className="w-full rounded-full border border-white/15 bg-background/40 py-3 text-sm text-foreground transition hover:border-accent-gold disabled:opacity-50"
+        >
+          {loading ? "Sending…" : "Resend confirmation email"}
+        </button>
       )}
     </div>
   );

@@ -6,9 +6,9 @@ The original Mother’s Day gift-unwrap intro lives at [`/intro`](src/app/intro/
 
 ---
 
-## ⚠️ Three one-time settings to flip BEFORE the family will be able to use the site
+## ⚠️ Four one-time settings to flip BEFORE the family will be able to use the site
 
-These are not bugs in the code — they are toggles that live in **Vercel** and **Supabase**. Until you do them once, the site will look broken from a relative’s phone.
+These are not bugs in the code — they are toggles that live in **Vercel**, **Supabase**, and (for reliable email) **Resend**. Until you do them once, the site will look broken from a relative’s phone.
 
 ### 1. Vercel: turn OFF Deployment Protection
 
@@ -84,9 +84,33 @@ For each one:
 > - **Enable Email provider** → **ON**
 > - **Confirm email** → **ON**
 
-This is the default. With it on, the **Sign up** form on `/` creates the account and emails a confirmation link. Clicking that link verifies the address and signs the person in (on whatever device they opened the email on). The app supports cross-device confirmation — both magic-link and signup emails are routed through a non-PKCE server action so the token in the email is not browser-locked.
+With it on, the **Sign up** form on `/` creates the account and emails a confirmation link. Clicking that link verifies the address and signs the person in (on whatever device they opened the email on). The app supports cross-device confirmation — both signup and password-reset emails are routed through a non-PKCE server action so the token in the email is not browser-locked.
 
-> **If Supabase email starts rate-limiting you and confirmation mails stop arriving**, temporarily flip “Confirm email” to **OFF**. The Sign up form will then log people in instantly with the password they chose, without waiting for an email. Flip it back on once the rate limit clears.
+### 4. Supabase: set up Resend SMTP (or your relatives won’t receive emails)
+
+> **This is the step that keeps catching us out.** Supabase’s built-in (free) email service is rate-limited to **about 3 emails per hour**. During testing you will hit that limit instantly. After it’s hit, sign-ups will silently succeed in the API but no email will be delivered. If you only ever see “sign-up email sent” status messages but never receive the email, this is the cause.
+>
+> The fix is custom SMTP. The five-minute, free option is **Resend** (Supabase’s recommended provider; 3,000 emails/month on the free plan).
+
+#### One-time Resend setup
+
+1. Sign up at [resend.com](https://resend.com).
+2. **Resend → API Keys → Create API Key** (full access; copy the value, it begins with `re_`).
+3. **Resend → Domains** — for the fastest path, just use the default `onboarding@resend.dev` sender (no domain required for development; you can verify a real domain later).
+4. **Supabase Dashboard → Project Settings → Authentication → SMTP Settings → Enable Custom SMTP.** Fill in:
+
+   | Field | Value |
+   |---|---|
+   | Host | `smtp.resend.com` |
+   | Port | `587` |
+   | Username | `resend` |
+   | Password | the `re_…` API key from step 2 |
+   | Sender email | `onboarding@resend.dev` (or your verified domain) |
+   | Sender name | `Family memories` (or whatever you want) |
+
+5. Save. Sign up again — the email should arrive within seconds. Resend’s **Logs** tab will show every send attempt and any bounces.
+
+If you can’t set up Resend right now and the rate-limit is blocking you, temporarily flip **Confirm email** to **OFF** in Supabase → Authentication → Providers → Email. Sign-ups will then log people in instantly with the password they chose, no email required. Flip it back on once SMTP is configured.
 
 ---
 
@@ -94,9 +118,9 @@ This is the default. With it on, the **Sign up** form on `/` creates the account
 
 `/` is the sign-up / sign-in form with three tabs:
 
-1. **Sign up** *(default)* — email + password. Sends a confirmation email if “Confirm email” is on; otherwise logs in instantly.
+1. **Sign up** *(default)* — email + password. Sends a confirmation email if “Confirm email” is on (otherwise logs in instantly). After signing up, a “Resend confirmation email” button appears in case Supabase rate-limited the first send.
 2. **Sign in** — email + password for returning visitors.
-3. **Email link** — magic-link fallback for relatives who forget their password. The link works cross-device.
+3. **Reset password** — sends a recovery email; the link lands on `/reset-password` where the user picks a new password and is signed straight into the app.
 
 Flow for a brand-new family member:
 
@@ -136,7 +160,7 @@ Set `NEXT_PUBLIC_SKIP_AUTH=1` in `.env.local`, restart `npm run dev`, then `/pro
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. **SQL Editor** → run [`supabase/migrations/001_initial.sql`](supabase/migrations/001_initial.sql) (creates the schema, RLS policies, and the `memory-photos` storage bucket).
-3. Do the **three one-time settings at the top of this README**.
+3. Do the **four one-time settings at the top of this README**.
 
 ---
 
@@ -144,7 +168,7 @@ Set `NEXT_PUBLIC_SKIP_AUTH=1` in `.env.local`, restart `npm run dev`, then `/pro
 
 1. Push the repo and import it in Vercel.
 2. **Environment Variables**: set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_SITE_URL` (your stable `.vercel.app` or custom domain — must include `https://`).
-3. Do the **three one-time settings at the top of this README**.
+3. Do the **four one-time settings at the top of this README**.
 
 After this you should never have to debug auth again.
 

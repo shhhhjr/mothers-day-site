@@ -89,7 +89,14 @@ export async function GET(request: Request) {
         encodeURIComponent(error.message.slice(0, 280)),
       );
     }
-    return NextResponse.redirect(new URL(next, requestUrl.origin));
+    // Recovery links must always end on /reset-password so the user actually
+    // sets a new password, regardless of what `next` was. Other types honor
+    // the requested `next`.
+    const finalDestination =
+      typeParam === "recovery" ? "/reset-password" : next;
+    return NextResponse.redirect(
+      new URL(finalDestination, requestUrl.origin),
+    );
   }
 
   if (code) {

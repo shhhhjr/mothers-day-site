@@ -48,7 +48,9 @@ function createNonPkceClient() {
 }
 
 /**
- * Sends a magic-link email using a non-PKCE Supabase client.
+ * Sends a magic-link email using a non-PKCE Supabase client. Currently used
+ * indirectly via `sendPasswordReset` for the "Reset password" UI flow; kept
+ * exported in case any future tab wants pure passwordless magic-link login.
  *
  * @see https://supabase.com/docs/guides/auth/server-side/email-based-auth
  */
@@ -67,6 +69,64 @@ export async function sendMagicLink(
   }
 
   const { error } = await supabase.auth.signInWithOtp({
+    email: trimmed,
+    options: { emailRedirectTo },
+  });
+  if (error) return failure(error);
+  return { ok: true, needsEmailConfirm: true };
+}
+
+/**
+ * Sends a password-recovery email. The link in the email lands on
+ * `/auth/callback?type=recovery&next=/reset-password`, which `verifyOtp`
+ * completes; the user then sets a new password on the `/reset-password` page.
+ *
+ * Note: Supabase intentionally returns success regardless of whether the
+ * email exists in the project (account-enumeration prevention). The status
+ * shown to the user is therefore always "if that email is on file…".
+ */
+export async function sendPasswordReset(
+  email: string,
+  redirectTo: string,
+): Promise<AuthActionResult> {
+  const trimmed = email.trim();
+  if (!trimmed || !trimmed.includes("@")) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
+
+  const supabase = createNonPkceClient();
+  if (!supabase) {
+    return { ok: false, error: "Supabase env vars are missing on the server." };
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+    redirectTo,
+  });
+  if (error) return failure(error);
+  return { ok: true, needsEmailConfirm: true };
+}
+
+/**
+ * Re-sends the signup confirmation email if the user didn't get the first
+ * one (Supabase's free-tier SMTP rate-limits aggressively). Uses the
+ * non-PKCE client so the resent token is cross-device clickable.
+ */
+export async function resendConfirmation(
+  email: string,
+  emailRedirectTo: string,
+): Promise<AuthActionResult> {
+  const trimmed = email.trim();
+  if (!trimmed || !trimmed.includes("@")) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
+
+  const supabase = createNonPkceClient();
+  if (!supabase) {
+    return { ok: false, error: "Supabase env vars are missing on the server." };
+  }
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
     email: trimmed,
     options: { emailRedirectTo },
   });
