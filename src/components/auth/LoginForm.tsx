@@ -46,6 +46,73 @@ function describeServerActionFailure(
 }
 
 /**
+ * Recognize Supabase signup errors that look scary but actually have a clean
+ * recovery path inside this UI (most commonly: "user already registered" when
+ * the user signed up earlier but never confirmed). Returns null if no special
+ * handling is appropriate and the raw error should be shown.
+ */
+function explainSignupFailure(
+  result: Extract<AuthActionResult, { ok: false }>,
+): string | null {
+  const message = (result.error || "").toLowerCase();
+  const code = (result.code || "").toLowerCase();
+  const isAlreadyRegistered =
+    code === "user_already_exists" ||
+    code === "email_exists" ||
+    message.includes("already registered") ||
+    message.includes("user already") ||
+    message.includes("email exists");
+
+  if (isAlreadyRegistered) {
+    return `An account with that email already exists.
+
+If you remember the password, switch to the “Sign in” tab.
+
+If you don’t — or you signed up earlier and never received the confirmation email — switch to the “Reset password” tab. The recovery link will both confirm the email and let you set a new password in one step.`;
+  }
+  return null;
+}
+
+/**
+ * Supabase returns the same "Invalid login credentials" message for two very
+ * different situations: (a) wrong password, and (b) the email isn't confirmed
+ * yet. (b) is impossible for a user to diagnose from the error alone — they
+ * just see "wrong password" forever. So when sign-in fails on credentials,
+ * always surface the password-reset escape hatch.
+ */
+function explainSigninFailure(error: {
+  message?: string | null;
+  status?: number;
+  code?: string;
+}): string | null {
+  const message = (error.message || "").toLowerCase();
+  const code = (error.code || "").toLowerCase();
+  const isCredentialMismatch =
+    code === "invalid_credentials" ||
+    error.status === 400 ||
+    message.includes("invalid login credentials") ||
+    message.includes("invalid credentials");
+  const isEmailNotConfirmed =
+    code === "email_not_confirmed" || message.includes("email not confirmed");
+
+  if (isEmailNotConfirmed) {
+    return `Your account exists but the email address hasn’t been confirmed yet.
+
+Open the “Reset password” tab and request a recovery email — clicking the link in it will confirm your email and let you set a (new) password in one step.`;
+  }
+
+  if (isCredentialMismatch) {
+    return `That email + password combination didn’t match an account.
+
+Two possibilities:
+• You typed the wrong password — try again.
+• You signed up earlier but never confirmed the email (Supabase masks this as “invalid credentials”). In that case, open the “Reset password” tab — the recovery email both confirms your address and lets you pick a fresh password.`;
+  }
+
+  return null;
+}
+
+/**
  * Recognize the most common Supabase "I tried to send an email and it broke"
  * failure modes and render advice the family member can actually act on.
  * Returns null if the error is something else and the raw message is fine.
@@ -136,7 +203,8 @@ Use the “Sign in” tab below with the email + password you signed up with —
     setLoading(false);
 
     if (!result.ok) {
-      const friendly = explainEmailDeliveryFailure(result);
+      const friendly =
+        explainSignupFailure(result) ?? explainEmailDeliveryFailure(result);
       setStatus({
         kind: "error",
         text: friendly
@@ -217,9 +285,15 @@ If you don’t see it in a few minutes, check spam, then use the “Resend confi
     });
     setLoading(false);
     if (error) {
+      const friendly = explainSigninFailure({
+        message: error.message,
+        status: typeof error.status === "number" ? error.status : undefined,
+        code: typeof error.code === "string" ? error.code : undefined,
+      });
+      const raw = describeAuthFailure(error, "Sign-in failed.");
       setStatus({
         kind: "error",
-        text: describeAuthFailure(error, "Sign-in failed."),
+        text: friendly ? `${friendly}\n\nRaw error: ${raw}` : raw,
       });
       return;
     }
@@ -295,9 +369,8 @@ Tap the link in the email and you’ll be taken to a page to choose a new passwo
       {mode === "signup" && (
         <form onSubmit={(e) => void handleSignUp(e)} className="space-y-4">
           <p className="text-xs text-muted">
-            New here? Pick a password (6+ characters) and we’ll email a
-            confirmation link to verify your address. After you tap the link,
-            you’ll choose your family profile.
+            New here? Pick a password (6+ characters). Once you’re in, you’ll
+            choose which family member you are on the next screen.
           </p>
           <label className="block text-sm text-muted">
             Email

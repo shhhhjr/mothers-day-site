@@ -19,14 +19,14 @@ export default async function ProfilesLayout({
       redirect("/login");
     }
 
+    // Don't redirect-loop unclaimed users to /onboarding any more — the
+    // /profiles "Who's watching?" picker now handles claim-on-first-click,
+    // so the smaller /onboarding screen would just be a duplicate ask.
     const member = await getCurrentMember();
-    if (!member) {
-      redirect("/onboarding");
-    }
 
     return (
       <div className="min-h-screen">
-        <SiteHeader profileName={member.profiles.display_name} />
+        <SiteHeader profileName={member?.profiles.display_name} />
         <div className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">{children}</div>
       </div>
     );

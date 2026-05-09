@@ -144,11 +144,12 @@ Flow for a brand-new family member (with Confirm email OFF — the default we re
 1. They visit the URL → see the **Sign up** form.
 2. Enter email + a password they pick → submit.
 3. They are logged in immediately and redirected to `/profiles`.
-4. `/profiles/layout` sees they don’t have a profile yet → redirects to `/onboarding`.
-5. They pick which family member they are (Mama, Daddy, Jais, Haas, Dadi).
-6. Done — they’re on the timeline.
+4. The big Netflix-style **“Who’s watching?”** picker tells first-timers to tap their face — that single tap both **claims** that profile (links it to their auth account) and takes them into that profile’s timeline.
+5. From then on, that profile is theirs (a “you” badge appears under it on the picker), and they can browse anyone else’s timeline read-only.
 
 If you flip Confirm email ON, insert “open the email and tap the verification link” between steps 2 and 3 — `/auth/callback` then verifies the `token_hash`, sets the session cookie, and continues into `/profiles`. The link is cross-device safe because the email-sending server actions deliberately bypass PKCE.
+
+> **Bookmarked `/onboarding`?** That route now permanently redirects to `/profiles` — the picker handles claim-on-first-click, so the dedicated onboarding screen would just be a duplicate ask.
 
 After that, the everyday flow is **Sign in** with email + password from any device.
 
@@ -202,9 +203,12 @@ After this you should never have to debug auth again.
 
 - `src/app/page.tsx` — homepage = sign-up / sign-in form
 - `src/app/intro/page.tsx` — the Mother’s Day gift-unwrap intro
-- `src/app/onboarding/`, `src/app/profiles/`, `src/app/profiles/[slug]/` — main app
+- `src/app/profiles/`, `src/app/profiles/[slug]/` — main app (the "Who's watching?" picker also handles claim-on-first-click)
+- `src/app/onboarding/page.tsx` — permanent redirect to `/profiles` (kept so old links don't 404)
 - `src/app/auth/callback/route.ts` — verifies email links via `verifyOtp({ token_hash, type })`
 - `src/app/actions/auth.ts` — non-PKCE server actions for sign-up + magic-link send (so emailed tokens work cross-device)
+- `src/app/actions/member.ts` — `completeOnboarding(slug)` server action used by `ProfileGrid` to claim a profile on first click
 - `src/components/auth/LoginForm.tsx` — three-tab form (Sign up / Sign in / Reset password)
+- `src/components/profiles/ProfileGrid.tsx` — the big "Who's watching?" picker; claims on first click, navigates after
 - `supabase/email-templates/` — paste-into-Supabase HTML
 - `supabase/migrations/001_initial.sql` — schema + RLS
